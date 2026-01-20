@@ -1,0 +1,10 @@
+fastapi
+langchain-mistralai
+pydantic
+langchain
+langchain-core
+langsmith
+pinecone
+uvicorn
+python-dotenv
+flask
