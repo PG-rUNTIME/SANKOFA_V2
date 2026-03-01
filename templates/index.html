@@ -5,345 +5,65 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sankofa Legal Chatbot</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-    
     <style>
-        /* --- 1. Custom Colors and Base Styles --- */
         :root {
-            /* --- COLOR PALETTE --- */
-            --primary-dark: #1A2C64;        /* Deep Indigo Blue */
-            --primary-light: #F9FAFB;       /* Very Light Gray */
-            --accent-purple: #8C4FE3;       /* Vibrant Purple (Main Accent) */
-            --accent-green-light: #90E9A9;  /* Light Mint Green */
-            --background-pale: #D8FEF4;     /* Very Pale Mint */
-            
-            /* --- UTILITY COLORS --- */
+            --primary-dark: #1A2C64;
+            --primary-light: #F9FAFB;
+            --accent-purple: #8C4FE3;
+            --accent-green-light: #90E9A9;
+            --background-pale: #D8FEF4;
             --text-dark: #374151;
             --text-medium: #6B7280;
-            --warning-red: #F87171;
-            
-            /* --- THEME COLORS --- */
             --sidebar-bg: var(--primary-dark);
             --sidebar-hover: #294080;
             --header-bg: var(--primary-dark);
             --disclaimer-bg: var(--accent-green-light);
             --button-hover: #6D3DCA;
         }
-        
-        /* Basic Styles */
-        html, body {
-            margin: 0;
-            padding: 0;
-            height: 100%;
-            overflow: hidden; 
-            box-sizing: border-box;
-            font-family: 'Inter', sans-serif;
-            font-size: 16px; /* Base size for better scaling */
-        }
-
-        body {
-            background-color: var(--background-pale);
-            display: flex;
-        }
-
-        /* --- 2. Main App Container --- */
-        #app {
-            display: flex;
-            width: 100%;
-            height: 100%;
-            border-radius: 12px;
-            overflow: hidden;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); /* App-level shadow for desktop */
-        }
-
-        /* --- 3. Sidebar Styling --- */
-        #sidebar {
-            width: 250px;
-            background-color: var(--sidebar-bg);
-            color: white;
-            display: flex;
-            flex-direction: column;
-            padding: 20px 16px;
-            box-shadow: 2px 0 10px rgba(0, 0, 0, 0.2);
-        }
-        
-        .sidebar-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            padding: 10px 0;
-            margin-bottom: 10px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        .sidebar-option {
-            padding: 12px;
-            color: white;
-            cursor: pointer;
-            border-radius: 8px;
-            margin-bottom: 8px;
-            transition: background 0.2s, transform 0.1s;
-            font-weight: 500;
-        }
-
-        .sidebar-option:hover {
-            background-color: var(--sidebar-hover);
-            transform: translateY(-1px); /* Subtle lift on hover */
-        }
-
-        .disclaimer {
-            background-color: var(--disclaimer-bg);
-            color: var(--text-dark);
-            padding: 12px;
-            border-radius: 8px;
-            margin-top: auto; /* Pushes to the bottom */
-            font-size: 0.85rem;
-            text-align: center;
-            font-weight: 600;
-            border: 1px solid rgba(0, 0, 0, 0.05);
-        }
-
-        /* --- 4. Chat Area --- */
-        #chat-area {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            background-color: var(--primary-light);
-        }
-
-        /* --- 5. Header Styling --- */
-        header {
-            background-color: var(--header-bg);
-            color: white;
-            padding: 18px 24px;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
-            display: flex;
-            align-items: center;
-            z-index: 10;
-        }
-
-        header h1 {
-            font-size: 1.6rem;
-            margin: 0;
-            flex-grow: 1;
-            text-align: center;
-            font-weight: 700;
-        }
-
-        /* --- 6. Chat History Area --- */
-        #chat-history {
-            flex-grow: 1;
-            padding: 24px 30px;
-            background-color: var(--background-pale);
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-            max-width: 1000px; 
-            margin: 0 auto; 
-            width: 100%;
-        }
-
-        /* --- 7. Message Bubble Classes --- */
-        .message-container {
-            display: flex;
-            flex-direction: column;
-        }
-
-        .ai-message-container {
-            align-items: flex-start;
-        }
-
-        .user-message-container {
-            align-items: flex-end;
-        }
-        
-        /* Paragraph inside bubble to ensure proper line height/margins */
-        .chat-bubble p {
-            margin: 0;
-            line-height: 1.6; /* Increased line-height for better readability of plain text */
-            white-space: pre-wrap; /* Crucial for displaying LLM newlines/paragraphs */
-        }
-
-        .chat-bubble {
-            padding: 16px;
-            border-radius: 20px; /* More rounded corners */
-            max-width: 75%;
-            transition: all 0.3s;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); /* Softer shadow */
-            position: relative;
-        }
-        
-        /* Triangle tails (optional, but adds a nice chat app feel) */
-        .chat-bubble::before {
-            content: '';
-            position: absolute;
-            width: 0;
-            height: 0;
-            border-style: solid;
-        }
-
-        .user-bubble {
-            background-color: var(--accent-purple);
-            color: white;
-            border-bottom-right-radius: 4px; /* Flatter bottom-right corner */
-        }
-        
-        .user-bubble::before {
-            border-width: 0 0 10px 10px;
-            border-color: transparent transparent transparent var(--accent-purple);
-            right: -10px;
-            bottom: 0;
-        }
-
-        .ai-bubble {
-            background-color: white;
-            color: var(--text-dark);
-            border: 1px solid #E5E7EB;
-            border-bottom-left-radius: 4px; /* Flatter bottom-left corner */
-        }
-        
-        .ai-bubble::before {
-            border-width: 0 10px 10px 0;
-            border-color: transparent var(--background-pale) transparent transparent;
-            left: -10px;
-            bottom: 0;
-        }
-        
-        /* Timestamp Styling */
-        .message-timestamp {
-            font-size: 0.7rem;
-            font-weight: 500;
-            color: var(--text-medium);
-            margin-top: 4px;
-            padding: 0 4px;
-            align-self: inherit;
-        }
-
-        /* --- 8. Footer and Form Styling (Refined) --- */
-        footer {
-            padding: 20px 24px;
-            border-top: 1px solid #E5E7EB;
-            background-color: white;
-            display: flex;
-            justify-content: center;
-            box-shadow: 0 -4px 15px rgba(0, 0, 0, 0.08);
-        }
-        
-        #query-form {
-            display: flex;
-            gap: 12px;
-            width: 100%;
-            max-width: 800px; /* Max width for input field */
-        }
-
-        #user-input {
-            flex-grow: 1;
-            padding: 14px 16px;
-            border: 2px solid #D1D5DB;
-            border-radius: 25px; /* Pill shape */
-            outline: none;
-            transition: border-color 0.3s, box-shadow 0.3s;
-            font-size: 1rem;
-        }
-        
-        #user-input:focus {
-            border-color: var(--accent-purple);
-            box-shadow: 0 0 0 3px rgba(140, 79, 227, 0.2); /* Focus ring effect */
-        }
-
-        /* --- 9. Submit Button Styling --- */
-        #submit-btn {
-            background-color: var(--accent-purple);
-            color: white;
-            padding: 12px 28px;
-            border-radius: 25px; /* Pill shape */
-            border: none;
-            cursor: pointer;
-            transition: background-color 0.2s, transform 0.1s;
-            font-weight: 600;
-            min-width: 80px;
-        }
-        #submit-btn:hover {
-            background-color: var(--button-hover);
-            transform: translateY(-1px);
-        }
-        #submit-btn:active {
-            transform: translateY(0);
-        }
-
-        /* Citation Styling */
-        .citations-container {
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 1px solid #E5E7EB; /* Solid line */
-        }
-        .citations-header {
-            font-size: 0.75rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            color: var(--text-dark);
-            margin-bottom: 10px;
-        }
-        .citation-item {
-            margin-bottom: 8px;
-            padding: 10px 12px;
-            background-color: var(--background-pale); 
-            border-radius: 8px;
-            border: 1px solid #D1D5DB;
-            font-size: 0.9rem;
-        }
-        .citation-link {
-            color: var(--accent-purple);
-            text-decoration: none;
-            font-weight: 600;
-        }
-        .citation-link:hover {
-            text-decoration: underline;
-        }
-        
-        /* Initial Message */
-        .initial-message {
-            text-align: center;
-            color: var(--text-medium);
-            font-style: italic;
-            margin-top: 60px;
-            padding: 16px;
-        }
+        html, body { margin: 0; padding: 0; height: 100%; overflow: hidden; box-sizing: border-box; font-family: 'Inter', sans-serif; }
+        body { background-color: var(--background-pale); display: flex; }
+        #app { display: flex; width: 100%; height: 100%; border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15); }
+        #sidebar { width: 250px; background-color: var(--sidebar-bg); color: white; display: flex; flex-direction: column; padding: 20px 16px; }
+        .sidebar-title { font-size: 1.25rem; font-weight: 700; padding: 10px 0; margin-bottom: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.1); }
+        .sidebar-option { padding: 12px; color: white; cursor: pointer; border-radius: 8px; margin-bottom: 8px; transition: background 0.2s; font-weight: 500; }
+        .sidebar-option:hover { background-color: var(--sidebar-hover); }
+        .disclaimer { background-color: var(--disclaimer-bg); color: var(--text-dark); padding: 12px; border-radius: 8px; margin-top: auto; font-size: 0.85rem; text-align: center; font-weight: 600; }
+        #chat-area { flex-grow: 1; display: flex; flex-direction: column; background-color: var(--primary-light); }
+        header { background-color: var(--header-bg); color: white; padding: 18px 24px; box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1); }
+        header h1 { font-size: 1.6rem; margin: 0; text-align: center; font-weight: 700; }
+        #chat-history { flex-grow: 1; padding: 24px 30px; background-color: var(--background-pale); overflow-y: auto; display: flex; flex-direction: column; gap: 20px; }
+        .message-container { display: flex; flex-direction: column; }
+        .ai-message-container { align-items: flex-start; }
+        .user-message-container { align-items: flex-end; }
+        .chat-bubble { padding: 16px; border-radius: 20px; max-width: 75%; box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1); position: relative; }
+        .chat-bubble p { margin: 0; line-height: 1.6; white-space: pre-wrap; }
+        .user-bubble { background-color: var(--accent-purple); color: white; border-bottom-right-radius: 4px; }
+        .ai-bubble { background-color: white; color: var(--text-dark); border: 1px solid #E5E7EB; border-bottom-left-radius: 4px; }
+        .message-timestamp { font-size: 0.7rem; font-weight: 500; color: var(--text-medium); margin-top: 4px; }
+        footer { padding: 20px 24px; border-top: 1px solid #E5E7EB; background-color: white; display: flex; justify-content: center; }
+        #query-form { display: flex; gap: 12px; width: 100%; max-width: 800px; }
+        #user-input { flex-grow: 1; padding: 14px 16px; border: 2px solid #D1D5DB; border-radius: 25px; outline: none; font-size: 1rem; }
+        #submit-btn { background-color: var(--accent-purple); color: white; padding: 12px 28px; border-radius: 25px; border: none; cursor: pointer; font-weight: 600; }
+        .citations-container { margin-top: 15px; padding-top: 10px; border-top: 1px solid #E5E7EB; }
+        .citation-item { margin-bottom: 8px; padding: 8px; background-color: #f3f4f6; border-radius: 6px; font-size: 0.85rem; }
+        .citation-link { color: var(--accent-purple); text-decoration: none; font-weight: 600; }
     </style>
 </head>
 <body>
-
     <div id="app">
-        
         <div id="sidebar">
             <div class="sidebar-title">Menu</div>
             <div class="sidebar-option" onclick="clearChat()">Clear Chat</div>
             <div class="sidebar-option" onclick="copyChat()">Copy Chat</div>
-            <div class="sidebar-option" onclick="exportChat()">Export Chat</div>
             <div class="disclaimer">Disclaimer: I am not a lawyer. Verify sources before use.</div>
         </div>
-
         <div id="chat-area">
-            <header>
-                <h1>🇿🇼 Sankofa Legal Chatbot</h1>
-            </header>
-
-            <main id="chat-history">
-                </main>
-
+            <header><h1>🇿🇼 Sankofa Legal Chatbot</h1></header>
+            <main id="chat-history"></main>
             <footer>
                 <form id="query-form">
-                    <input 
-                        type="text" 
-                        id="user-input" 
-                        placeholder="Ask a legal question about Zimbabwean case law..." 
-                        required 
-                    />
-                    <button 
-                        type="submit" 
-                        id="submit-btn" 
-                    >
-                        Ask
-                    </button>
+                    <input type="text" id="user-input" placeholder="Ask a legal question..." required />
+                    <button type="submit" id="submit-btn">Ask</button>
                 </form>
             </footer>
         </div>
@@ -355,65 +75,23 @@
         const form = document.getElementById('query-form');
         const userInput = document.getElementById('user-input');
 
-        // State Management
         let chatHistory = JSON.parse(sessionStorage.getItem('legalChatHistory')) || [];
 
-        function formatTime() {
-            return new Date().toLocaleTimeString('en-US', {
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-                hour12: false
-            });
-        }
-
-        function renderChat() {
-            chatHistoryEl.innerHTML = '';
-            if (chatHistory.length === 0) {
-                chatHistoryEl.innerHTML = `
-                    <div class="initial-message">
-                        <p>Welcome to your ZimLII Legal Assistant.</p>
-                        <p>Ask a question about Zimbabwean case law to begin your research.</p>
-                    </div>
-                `;
-                return;
-            }
-            chatHistory.forEach(msg => {
-                chatHistoryEl.appendChild(createMessageElement(msg.role, msg.content));
-            });
-            chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
-        }
+        function formatTime() { return new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }); }
 
         function createMessageElement(role, content) {
             const containerClass = role === 'user' ? 'user-message-container' : 'ai-message-container';
             const bubbleClass = role === 'user' ? 'user-bubble' : 'ai-bubble';
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message-container ${containerClass}`;
-            
-            // Note: The content.answer is wrapped in <p> to leverage the CSS line-height for readability.
-            messageDiv.innerHTML = `
+            const div = document.createElement('div');
+            div.className = `message-container ${containerClass}`;
+            div.innerHTML = `
                 <div class="chat-bubble ${bubbleClass}">
-                    <p>${content.answer}</p> 
-                    ${role === 'ai' ? formatCitations(content.citations) : ''}
+                    <p class="text-content">${content.answer}</p>
+                    <div class="citations-wrapper"></div>
                 </div>
                 <span class="message-timestamp">${content.timestamp}</span>
             `;
-            return messageDiv;
-        }
-
-        function formatCitations(citations) {
-            if (!citations || citations.length === 0) return '';
-            let html = '<div class="citations-container"><h4 class="citations-header">Judgement Sources:</h4>';
-            citations.forEach(c => {
-                html += `
-                    <div class="citation-item">
-                        <p>${c.document_title || 'Untitled Document'}</p>
-                        <a href="${c.url}" target="_blank" class="citation-link">View Full Document</a>
-                    </div>
-                `;
-            });
-            html += '</div>';
-            return html;
+            return div;
         }
 
         async function submitQuery(event) {
@@ -421,83 +99,49 @@
             const question = userInput.value.trim();
             if (!question) return;
 
-            const userMessage = { 
-                role: 'user', 
-                content: { 
-                    answer: question, 
-                    citations: [], 
-                    timestamp: formatTime() 
-                } 
-            };
-            chatHistory.push(userMessage);
-            renderChat();
+            // Add User Message
+            const userMsg = { role: 'user', content: { answer: question, timestamp: formatTime() }};
+            chatHistory.push(userMsg);
+            chatHistoryEl.appendChild(createMessageElement('user', userMsg.content));
             userInput.value = '';
+            chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
+
+            // Prepare AI Bubble
+            const aiMsgContent = { answer: '', timestamp: formatTime() };
+            const aiMessageEl = createMessageElement('ai', aiMsgContent);
+            chatHistoryEl.appendChild(aiMessageEl);
+            const textEl = aiMessageEl.querySelector('.text-content');
 
             try {
                 const response = await fetch(API_ENDPOINT, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ question: question })
+                    body: JSON.stringify({ question })
                 });
 
-                if (!response.ok) {
-                    throw new Error(`API returned status ${response.status}`);
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let accumulatedText = "";
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    accumulatedText += decoder.decode(value);
+                    textEl.innerText = accumulatedText;
+                    chatHistoryEl.scrollTop = chatHistoryEl.scrollHeight;
                 }
 
-                const result = await response.json();
-                const aiMessage = { 
-                    role: 'ai', 
-                    content: {
-                        answer: result.answer,
-                        citations: result.citations,
-                        timestamp: formatTime()
-                    }
-                };
-                chatHistory.push(aiMessage);
+                // Finalize history
+                chatHistory.push({ role: 'ai', content: { answer: accumulatedText, timestamp: formatTime() }});
                 sessionStorage.setItem('legalChatHistory', JSON.stringify(chatHistory));
-            } catch (error) {
-                const errorMessage = { 
-                    role: 'ai', 
-                    content: { 
-                        answer: "Error connecting to the server.", 
-                        citations: [], 
-                        timestamp: formatTime() 
-                    } 
-                };
-                chatHistory.push(errorMessage);
-            } finally {
-                renderChat();
+            } catch (e) {
+                textEl.innerText = "Error: Could not reach server.";
             }
         }
 
-        function clearChat() {
-            chatHistory = [];
-            sessionStorage.removeItem('legalChatHistory');
-            renderChat();
-        }
-
-        function copyChat() {
-            const chatText = chatHistory.map(msg => `${msg.role === 'user' ? 'You' : 'Assistant'}: ${msg.content.answer}`).join('\n');
-            navigator.clipboard.writeText(chatText).then(() => {
-                alert('Chat copied to clipboard!');
-            });
-        }
-
-        function exportChat() {
-            const chatText = chatHistory.map(msg => `${msg.role === 'user' ? 'You' : 'Assistant'}: ${msg.content.answer}`).join('\n');
-            const blob = new Blob([chatText], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'chat.txt';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-        }
-
+        function clearChat() { chatHistory = []; sessionStorage.removeItem('legalChatHistory'); location.reload(); }
         form.addEventListener('submit', submitQuery);
-        window.onload = renderChat;
-
+        window.onload = () => chatHistory.forEach(m => chatHistoryEl.appendChild(createMessageElement(m.role, m.content)));
     </script>
 </body>
 </html>
