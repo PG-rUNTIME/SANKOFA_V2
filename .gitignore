@@ -1,6 +1,7 @@
 # Environment
 .env
 *.env
+.env.*
 
 # Python
 __pycache__/
@@ -10,6 +11,7 @@ __pycache__/
 *.pyc
 .Python
 venv/
+venv311/
 env/
 .venv/
 *.egg-info/

@@ -196,8 +196,9 @@ async def ask(
     if rag_engine._is_clearly_non_legal(question):
         intent = "NO_SEARCH"
         docs = []
+        veritas_note = ""
     else:
-        intent, docs = await rag_engine.classify_and_retrieve(question, history)
+        intent, docs, veritas_note = await rag_engine.classify_and_retrieve(question, history)
 
     logger.info("Intent for session %s: %s | docs: %d", session.id, intent, len(docs))
 
@@ -224,7 +225,7 @@ async def ask(
                     yield f"data: {json.dumps({'type': 'citations', 'data': citations_payload})}\n\n"
 
                 async for chunk in rag_engine.stream_legal_answer(
-                    question, history, docs, citation_objects
+                    question, history, docs, citation_objects, veritas_note
                 ):
                     full_answer += chunk
                     yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"

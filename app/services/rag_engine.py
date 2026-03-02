@@ -48,6 +48,17 @@ OFF_LIMITS_TOPICS = {
 }
 
 
+CONSTITUTION_KEYWORDS = {
+    "constitution", "constitutional", "bill of rights", "section 69", "section 70",
+    "section 48", "section 49", "section 50", "section 51", "section 52", "section 53",
+    "section 54", "section 55", "section 56", "section 57", "section 58", "section 60",
+    "section 61", "section 62", "section 63", "section 64", "section 65", "section 67",
+    "section 68", "section 71", "section 72", "section 73", "section 74", "section 75",
+    "section 76", "section 77", "section 78", "section 79", "section 80", "section 81",
+    "chapter 4", "fundamental rights", "declaration of rights", "constitutional rights",
+    "constitutional provision", "constitutional law", "constitutionally", "unconstitutional",
+}
+
 def _is_off_limits(question: str) -> bool:
     q = question.lower()
     return any(phrase in q for phrase in OFF_LIMITS_TOPICS)
@@ -58,6 +69,27 @@ def _is_clearly_non_legal(question: str) -> bool:
     if any(kw in q for kw in LEGAL_DOMAIN_KEYWORDS):
         return False
     return any(kw in q for kw in NON_LEGAL_TOPICS)
+
+
+def _is_constitution_query(question: str) -> bool:
+    q = question.lower()
+    return any(kw in q for kw in CONSTITUTION_KEYWORDS)
+
+
+async def _fetch_veritas_note() -> str:
+    """
+    Return a short advisory directing the LLM to reference Veritas Zimbabwe
+    for constitutional provisions. We do NOT scrape the live page (to avoid
+    latency); instead we embed a reliable canonical reference.
+    """
+    return (
+        "CONSTITUTIONAL REFERENCE (Veritas Zimbabwe): "
+        "For the text of the Constitution of Zimbabwe Amendment (No. 20) Act 2013 "
+        "and all constitutional provisions, the authoritative source is "
+        "https://www.veritaszim.net/ (Veritas Trust Zimbabwe). "
+        "When citing constitutional sections, direct the user to verify the exact "
+        "text at https://www.veritaszim.net/ as the primary source."
+    )
 
 
 # ── LLM factory ───────────────────────────────────────────────────────────────
@@ -132,7 +164,7 @@ def retrieve_documents(query: str, top_k: int | None = None) -> List[Document]:
             ) or {}
             meta = dict(meta)
             text = meta.pop("text", "") or meta.pop("content", "")
-            meta.pop("chunk_index", None)
+            # Keep chunk_index in metadata for traceability; just extract text
             meta["_score"] = round(float(score), 4)
             if text.strip():
                 docs.append(Document(page_content=text.strip(), metadata=meta))
@@ -154,7 +186,10 @@ def extract_citations(docs: List[Document]) -> List[Citation]:
         url = meta.get("akn_url") or meta.get("url") or ""
         title = meta.get("document_title") or meta.get("title") or "Untitled Document"
         source = meta.get("source_file") or meta.get("file_name") or "Unknown Source"
-        if url and url not in seen:
+        # Always include docs with a real akn_url; skip only those with no URL at all
+        if not url:
+            continue
+        if url not in seen:
             citations.append(Citation(url=url, document_title=title, source_file=source))
             seen.add(url)
     return citations
@@ -166,11 +201,19 @@ def _build_citation_index(citations: List[Citation]) -> str:
     Gives the LLM exact URLs to use in inline [Title](url) markdown links.
     """
     if not citations:
-        return "No source documents are available in the database for this query."
-    lines = ["Available sources — use these exact URLs for inline markdown hyperlinks:"]
+        return (
+            "NO_SOURCES_FOUND — No documents with a verifiable akn_url were returned "
+            "for this query. Answer the question using your legal knowledge of Zimbabwean law. "
+            "Do NOT mention the database, Pinecone, or any retrieval system in your response. "
+            "Do NOT fabricate case URLs. You may reference well-known statutes and case names "
+            "by name only (without inventing URLs). Simply answer the legal question directly."
+        )
+    lines = ["Available sources — use ONLY these exact URLs for inline markdown citation links:"]
     for i, c in enumerate(citations, 1):
         lines.append(
-            f'[{i}] Title: "{c.document_title}"  |  URL: {c.url}  |  File: {c.source_file}'
+            f'[{i}] Title: "{c.document_title}"'
+            f'  |  URL: {c.url}'
+            f'  |  File: {c.source_file}'
         )
     return "\n".join(lines)
 
@@ -221,8 +264,12 @@ RESPONSE FORMAT — follow these rules exactly
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ANSWER QUALITY RULES
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-- Answer ONLY from the PROVIDED LEGAL CONTEXT. Do NOT fabricate cases, facts, or statutes.
-- If the context is insufficient, say so clearly and explain what kind of practitioner to consult.
+- Answer ONLY from the PROVIDED LEGAL CONTEXT below. Do NOT fabricate cases, facts, URLs, or statutes.
+- CRITICAL: Only cite cases/documents that appear in the SOURCES list above with a real akn_url.
+  Never invent a URL or a case name. If a case is not in SOURCES, do not cite it.
+- If the SOURCES list begins with "NO_SOURCES_FOUND", answer the question directly using your
+  legal knowledge of Zimbabwean law. Never mention the database, retrieval system, or Pinecone.
+  Do not say "no sources were found". Just give a helpful, accurate legal answer.
 - More recent case law takes precedence — note this where relevant.
 - Cite the specific section number, chapter number, or full case citation for every legal point.
 - Do NOT predict court outcomes or express personal opinions.
@@ -298,17 +345,27 @@ async def classify_intent(question: str, history: List[dict]) -> str:
 async def classify_and_retrieve(
     question: str,
     history: List[dict],
-) -> tuple[str, List[Document]]:
+) -> tuple[str, List[Document], str]:
     """
     Run intent classification and Pinecone retrieval concurrently.
     Combined latency = max(classify_time, retrieval_time) instead of sum.
     Retrieval is sync so it runs in a thread-pool executor.
+    Returns (intent, docs, veritas_note).
     """
     loop = asyncio.get_event_loop()
     intent_task = asyncio.create_task(classify_intent(question, history))
     retrieval_task = loop.run_in_executor(None, retrieve_documents, question)
-    intent, docs = await asyncio.gather(intent_task, retrieval_task)
-    return intent, docs
+
+    tasks: list = [intent_task, retrieval_task]
+    is_const = _is_constitution_query(question)
+    if is_const:
+        veritas_task = asyncio.create_task(_fetch_veritas_note())
+        tasks.append(veritas_task)
+
+    results = await asyncio.gather(*tasks)
+    intent, docs = results[0], results[1]
+    veritas_note = results[2] if is_const else ""
+    return intent, docs, veritas_note
 
 
 # ── Streaming generators ──────────────────────────────────────────────────────
@@ -318,6 +375,7 @@ async def stream_legal_answer(
     history: List[dict],
     docs: List[Document],
     citations: List[Citation],
+    veritas_note: str = "",
 ) -> AsyncGenerator[str, None]:
     """Stream a markdown-formatted, fully-cited legal answer."""
     if docs:
@@ -326,14 +384,26 @@ async def stream_legal_answer(
             meta = d.metadata
             src_url = meta.get("akn_url") or meta.get("url", "N/A")
             src_title = meta.get("document_title") or meta.get("title", "Unknown")
+            src_file = meta.get("source_file") or meta.get("file_name", "")
+            chunk_idx = meta.get("chunk_index", "")
             score = meta.get("_score", 0)
             context_parts.append(
-                f"[Source: {src_title} | URL: {src_url} | Relevance: {score:.3f}]\n\n"
+                f"[Source: {src_title} | URL: {src_url} | File: {src_file}"
+                f"{f' | Chunk: {chunk_idx}' if chunk_idx != '' else ''}"
+                f" | Relevance: {score:.3f}]\n\n"
                 f"{d.page_content}"
             )
         context = "\n\n---\n\n".join(context_parts)
+        if veritas_note:
+            context = veritas_note + "\n\n---\n\n" + context
     else:
-        context = "No relevant documents were found in the database for this query."
+        context = (
+            "No retrieved documents for this query. Answer using your knowledge of "
+            "Zimbabwean law. Do not mention any retrieval system or database. "
+            "Do not fabricate case URLs."
+        )
+        if veritas_note:
+            context = veritas_note + "\n\n" + context
 
     citation_index = _build_citation_index(citations)
     lc_history = _history_to_lc(history[:-1])

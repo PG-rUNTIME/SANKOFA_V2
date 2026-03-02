@@ -44,6 +44,48 @@
   --t:          .18s ease;
 }
 
+/* ── Dark mode overrides ── */
+[data-theme="dark"]{
+  --navy:       #818CF8;
+  --navy-dk:    #0F172A;
+  --navy-md:    #1E293B;
+  --purple:     #A78BFA;
+  --purple-lt:  #C4B5FD;
+  --purple-gl:  rgba(167,139,250,.15);
+  --gold:       #FCD34D;
+  --gold-lt:    #FDE68A;
+  --green:      #34D399;
+  --red:        #F87171;
+  --bg:         #0F172A;
+  --surface:    #1E293B;
+  --surface2:   #273549;
+  --border:     #334155;
+  --border-dk:  #475569;
+  --text:       #F1F5F9;
+  --text-2:     #CBD5E1;
+  --text-muted: #94A3B8;
+  --text-light: #64748B;
+}
+[data-theme="dark"] #sidebar{background:#0D1526}
+[data-theme="dark"] .auth-wrap{background:var(--surface)}
+[data-theme="dark"] .bubble-user{background:linear-gradient(135deg,var(--purple),#3730A3)}
+[data-theme="dark"] .citations{background:#1E3A5F;border-color:#2563EB}
+[data-theme="dark"] .citations-title{color:var(--purple-lt)}
+[data-theme="dark"] .cite-title a{color:var(--purple-lt)}
+[data-theme="dark"] .modal{background:var(--surface)}
+[data-theme="dark"] .rcard{background:var(--surface)}
+[data-theme="dark"] .acct-card,[data-theme="dark"] .admin-card{background:var(--surface)}
+[data-theme="dark"] .a-err{background:#3B1010;border-color:#7F1D1D;color:#FCA5A5}
+[data-theme="dark"] .a-ok{background:#063B26;border-color:#065F46;color:#6EE7B7}
+[data-theme="dark"] .auth-alert.error{background:#3B1010;border-color:#7F1D1D;color:#FCA5A5}
+[data-theme="dark"] .auth-alert.success{background:#063B26;border-color:#065F46;color:#6EE7B7}
+[data-theme="dark"] .disclaimer-bar{background:#292524;border-color:#44403C;color:#D6D3D1}
+[data-theme="dark"] .upload-zone{background:var(--surface);border-color:var(--border-dk)}
+[data-theme="dark"] .fi{background:var(--surface2);border-color:var(--border);color:var(--text)}
+[data-theme="dark"] .tag-ok{background:#064E3B;color:#6EE7B7}
+[data-theme="dark"] .tag-err{background:#450A0A;color:#FCA5A5}
+[data-theme="dark"] .tag-warn{background:#451A03;color:#FDE68A}
+
 /* ═════════════════════════════════ RESET ════════════════════════════════════ */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--text);-webkit-font-smoothing:antialiased}
@@ -414,6 +456,15 @@ a{color:inherit;text-decoration:none}
 }
 @keyframes cursor-blink{0%,100%{opacity:1}50%{opacity:0}}
 
+/* ── Theme toggle button ── */
+.theme-btn{
+  width:32px;height:32px;border-radius:8px;flex-shrink:0;
+  background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.12);
+  color:rgba(255,255,255,.7);display:flex;align-items:center;justify-content:center;
+  font-size:.95rem;transition:all var(--t);cursor:pointer;
+}
+.theme-btn:hover{background:rgba(255,255,255,.15);color:#fff}
+
 /* chat footer */
 .chat-footer{
   padding:14px 20px 18px;
@@ -681,12 +732,15 @@ a{color:inherit;text-decoration:none}
   <!-- ── SIDEBAR ──────────────────────────────────────────────────────────── -->
   <div id="sidebar">
     <div class="sidebar-head">
-      <div class="brand">
-        <div class="brand-icon">⚖️</div>
-        <div>
-          <div class="brand-text-name">Sankofa</div>
-          <div class="brand-text-sub">Legal AI</div>
+      <div class="brand" style="justify-content:space-between">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="brand-icon">⚖️</div>
+          <div>
+            <div class="brand-text-name">Sankofa</div>
+            <div class="brand-text-sub">Legal AI</div>
+          </div>
         </div>
+        <button class="theme-btn" id="theme-toggle-btn" onclick="toggleTheme()" title="Toggle dark/light mode">🌙</button>
       </div>
     </div>
 
@@ -1327,7 +1381,7 @@ async function sendMsg(){
       <div class="msg-sender">Sankofa AI</div>
       <div class="bubble bubble-ai">
         <div class="status-pill">
-          <div class="sdot"></div> Searching legal database…
+          <div class="sdot"></div> Thinking…
         </div>
         <div class="md-body"></div>
         <div class="live-cites"></div>
@@ -1385,10 +1439,10 @@ async function sendMsg(){
         try{ ev=JSON.parse(line.slice(6)); }catch{ continue; }
 
         if(ev.type==='status'){
-          statusEl.innerHTML=`<div class="sdot"></div> Composing answer…`;
+          statusEl.innerHTML=`<div class="sdot"></div> Thinking…`;
         } else if(ev.type==='citations' && ev.data?.length){
           citesEl.innerHTML=buildCitePanel(ev.data);
-          statusEl.innerHTML=`<div class="sdot"></div> Composing answer…`;
+          statusEl.innerHTML=`<div class="sdot"></div> Thinking…`;
         } else if(ev.type==='token'){
           if(statusEl.parentNode){ statusEl.remove(); }   // hide pill once text starts
           full+=ev.content;
@@ -1599,6 +1653,28 @@ document.addEventListener('keydown',e=>{
   else if(active.id==='f-forgot') doForgot();
   else if(active.id==='f-reset') doResetPw();
 });
+
+/* ─── Theme toggle ───────────────────────────────────────────────────────────── */
+function toggleTheme(){
+  const isDark = document.documentElement.getAttribute('data-theme')==='dark';
+  const next = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('sk_theme', next);
+  const btn = document.getElementById('theme-toggle-btn');
+  if(btn) btn.textContent = next==='dark' ? '☀️' : '🌙';
+}
+(function applyTheme(){
+  const saved = localStorage.getItem('sk_theme') || 'light';
+  document.documentElement.setAttribute('data-theme', saved);
+  // set button icon once DOM ready
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('theme-toggle-btn');
+    if(btn) btn.textContent = saved==='dark' ? '☀️' : '🌙';
+  });
+  // also try immediately (script runs after body in this case)
+  const btn = document.getElementById('theme-toggle-btn');
+  if(btn) btn.textContent = saved==='dark' ? '☀️' : '🌙';
+})();
 </script>
 </body>
 </html>{% endraw %}
