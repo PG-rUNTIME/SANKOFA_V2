@@ -395,6 +395,7 @@ a{color:inherit;text-decoration:none}
 @keyframes blink{0%,80%,100%{transform:scale(.75);opacity:.35}40%{transform:scale(1.1);opacity:1}}
 .msg-time{font-size:.65rem;color:var(--text-light);margin-top:5px}
 .msg-row.user .msg-time{text-align:right}
+.gen-time{margin-top:10px;font-size:.68rem;color:var(--text-light);font-style:italic;border-top:1px solid var(--border);padding-top:6px}
 
 /* citations */
 .citations{
@@ -421,6 +422,11 @@ a{color:inherit;text-decoration:none}
   width:6px;height:6px;border-radius:50%;background:var(--purple);
   animation:blink 1s infinite;
 }
+.status-pill .s-word{
+  display:inline-block;
+  animation:fadeWord .3s ease;
+}
+@keyframes fadeWord{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
 
 /* markdown rendered content inside .bubble-ai */
 .md-body{font-size:.875rem;line-height:1.75;color:var(--text-2)}
@@ -996,11 +1002,11 @@ const API = '/api/v1';
 let _tok   = localStorage.getItem('sk_at')  || '';
 let _rTok  = localStorage.getItem('sk_rt')  || '';
 let _user  = JSON.parse(localStorage.getItem('sk_user') || 'null');
-let _sid   = null;          // current chat session id
-let _busy  = false;         // streaming in progress
-let _file  = null;          // uploaded file
-let _termsAccepted = !!localStorage.getItem('sk_terms'); // once per browser
-let _currentView = 'chat';
+let _sid            = null;   // current chat session id
+let _busy           = false;  // streaming in progress
+let _file           = null;   // uploaded file
+let _termsAccepted  = !!localStorage.getItem('sk_terms');
+let _currentView    = 'chat';
 
 /* ─── Boot ─────────────────────────────────────────────────────────────────── */
 (function boot() {
@@ -1381,7 +1387,7 @@ async function sendMsg(){
       <div class="msg-sender">Sankofa AI</div>
       <div class="bubble bubble-ai">
         <div class="status-pill">
-          <div class="sdot"></div> Thinking…
+          <div class="sdot"></div><span class="s-word">Thinking…</span>
         </div>
         <div class="md-body"></div>
         <div class="live-cites"></div>
@@ -1394,22 +1400,56 @@ async function sendMsg(){
   const statusEl  = aiRow.querySelector('.status-pill');
   const mdEl      = aiRow.querySelector('.md-body');
   const citesEl   = aiRow.querySelector('.live-cites');
+  const wordEl    = statusEl.querySelector('.s-word');
 
-  let full='';
-  let renderTimer=null;
+  // Phase-based word cycling — each SSE status event switches to the matching phase
+  // Words within each phase cycle continuously until the next phase starts
+  const _phases = {
+    thinking:   ['Thinking…','Processing…','Interpreting…','Understanding…','Parsing question…','Evaluating query…','Reading context…','Decoding intent…','Classifying query…','Considering scope…'],
+    retrieving: ['Searching database…','Retrieving documents…','Scanning records…','Looking up statutes…','Querying knowledge base…','Fetching case law…','Browsing legislation…','Locating sources…','Pulling references…','Sifting through cases…'],
+    verifying:  ['Verifying sources…','Cross-referencing…','Checking citations…','Validating statutes…','Confirming accuracy…','Reviewing precedents…','Authenticating records…','Matching references…','Assessing relevance…','Scrutinising results…'],
+    finalising: ['Finalising answer…','Composing response…','Structuring output…','Formatting citations…','Drafting response…','Building answer…','Organising findings…','Preparing summary…','Compiling result…','Polishing answer…'],
+  };
+  let _currentPhase = 'thinking';
+  let _cycleIdx = 0;
+  let _cycleTimer = null;
 
-  // Throttled markdown render — update DOM at most every 80ms during streaming
-  function scheduleRender(){
-    if(renderTimer) return;
-    renderTimer=setTimeout(()=>{
-      renderTimer=null;
-      mdEl.innerHTML=renderMd(full)+'<span class="cursor"></span>';
-      container.scrollTop=container.scrollHeight;
-    }, 80);
+  function _setWord(text){
+    wordEl.textContent = text;
+    wordEl.style.animation = 'none';
+    void wordEl.offsetWidth; // force reflow to restart CSS animation
+    wordEl.style.animation = '';
+  }
+
+  function _startPhase(phase){
+    _stopWordCycle();
+    _currentPhase = phase;
+    _cycleIdx = 0;
+    const words = _phases[phase] || _phases.thinking;
+    _setWord(words[0]);
+    _cycleTimer = setInterval(()=>{
+      _cycleIdx = (_cycleIdx + 1) % words.length;
+      _setWord(words[_cycleIdx]);
+    }, 950);
+  }
+
+  function _stopWordCycle(){
+    if(_cycleTimer){ clearInterval(_cycleTimer); _cycleTimer = null; }
+  }
+
+  _startPhase('thinking');
+
+  let full = '';
+  let _scrollPending = false;
+
+  function _scheduleScroll(){
+    if(_scrollPending) return;
+    _scrollPending = true;
+    requestAnimationFrame(()=>{ container.scrollTop=container.scrollHeight; _scrollPending=false; });
   }
 
   try{
-    const res=await fetch(API+'/chat/ask',{
+    const res = await fetch(API+'/chat/ask',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':`Bearer ${_tok}`},
       body:JSON.stringify({question, session_id:_sid})
@@ -1422,46 +1462,71 @@ async function sendMsg(){
       return;
     }
 
-    const reader=res.body.getReader();
-    const dec=new TextDecoder();
-    let buf='';
+    const reader = res.body.getReader();
+    const dec    = new TextDecoder();
+    let buf = '';
 
     while(true){
-      const {done,value}=await reader.read();
+      const {done, value} = await reader.read();
       if(done) break;
-      buf+=dec.decode(value,{stream:true});
-      const lines=buf.split('\n');
-      buf=lines.pop();
+      buf += dec.decode(value, {stream:true});
 
-      for(const line of lines){
-        if(!line.startsWith('data: ')) continue;
-        let ev;
-        try{ ev=JSON.parse(line.slice(6)); }catch{ continue; }
+      // SSE events are separated by double newline
+      let boundary;
+      while((boundary = buf.indexOf('\n\n')) !== -1){
+        const raw = buf.slice(0, boundary);
+        buf = buf.slice(boundary + 2);
 
-        if(ev.type==='status'){
-          statusEl.innerHTML=`<div class="sdot"></div> Thinking…`;
-        } else if(ev.type==='citations' && ev.data?.length){
-          citesEl.innerHTML=buildCitePanel(ev.data);
-          statusEl.innerHTML=`<div class="sdot"></div> Thinking…`;
-        } else if(ev.type==='token'){
-          if(statusEl.parentNode){ statusEl.remove(); }   // hide pill once text starts
-          full+=ev.content;
-          scheduleRender();
-        } else if(ev.type==='done'){
-          if(ev.session_id){ _sid=ev.session_id; loadSessions(); }
+        for(const line of raw.split('\n')){
+          if(!line.startsWith('data: ')) continue;
+          let ev;
+          try{ ev = JSON.parse(line.slice(6)); }catch{ continue; }
+
+          if(ev.type === 'status'){
+            _startPhase(ev.content || 'thinking');
+
+          } else if(ev.type === 'citations' && ev.data?.length){
+            citesEl.innerHTML = buildCitePanel(ev.data);
+
+          } else if(ev.type === 'token'){
+            _stopWordCycle();
+            if(statusEl.parentNode) statusEl.remove();
+            // Append text directly — zero markdown cost during streaming
+            if(!mdEl._streamNode){
+              mdEl.innerHTML = '';
+              mdEl._streamNode = document.createTextNode('');
+              const pre = document.createElement('span');
+              pre.style.cssText = 'white-space:pre-wrap;word-break:break-word';
+              pre.appendChild(mdEl._streamNode);
+              mdEl.appendChild(pre);
+            }
+            mdEl._streamNode.nodeValue += ev.content;
+            full += ev.content;
+            _scheduleScroll();
+
+          } else if(ev.type === 'done'){
+            if(ev.session_id){ _sid = ev.session_id; loadSessions(); }
+            // Swap raw text → fully rendered markdown, then append time badge
+            mdEl._streamNode = null;
+            const secs = ev.elapsed_ms != null ? (ev.elapsed_ms/1000).toFixed(1) : null;
+            mdEl.innerHTML = renderMd(full)
+              + (secs ? `<div class="gen-time">⏱ Generated in ${secs}s</div>` : '');
+            _scheduleScroll();
+          }
         }
       }
     }
 
   }catch(err){
-    mdEl.innerHTML=`<p style="color:var(--red)">Connection error. Please check your network and try again.</p>`;
+    _stopWordCycle();
+    mdEl._streamNode = null;
+    mdEl.innerHTML = `<p style="color:var(--red)">Connection error. Please check your network and try again.</p>`;
   }finally{
-    // Final clean render — remove streaming cursor
-    if(renderTimer){ clearTimeout(renderTimer); renderTimer=null; }
-    mdEl.innerHTML=renderMd(full);
+    _stopWordCycle();
+    if(mdEl._streamNode){ mdEl._streamNode=null; mdEl.innerHTML=renderMd(full); }
     statusEl.parentNode && statusEl.remove();
-    _busy=false;
-    document.getElementById('send-btn').disabled=false;
+    _busy = false;
+    document.getElementById('send-btn').disabled = false;
   }
 }
 
@@ -1603,8 +1668,9 @@ async function loadUsers(){
         </td>
         <td><span class="badge badge-${u.role}">${u.role}</span></td>
         <td><span class="badge badge-${u.is_active?'on':'off'}">${u.is_active?'Active':'Disabled'}</span></td>
-        <td style="white-space:nowrap">
+        <td style="white-space:nowrap;display:flex;gap:5px;align-items:center">
           <button class="btn-sm btn-warn-sm" onclick="toggleUser('${u.id}',${u.is_active},'${esc(u.full_name)}')">${u.is_active?'Disable':'Enable'}</button>
+          <button class="btn-sm btn-danger-sm" onclick="deleteUser('${u.id}','${esc(u.full_name)}')">Delete</button>
         </td>
       </tr>`).join('');
   }catch{ toast('Error loading users','error'); }
@@ -1620,6 +1686,16 @@ async function toggleUser(id, active, name){
     toast(`User ${active?'disabled':'enabled'}`,'success');
     loadUsers();
   }catch{ toast('Error','error'); }
+}
+
+async function deleteUser(id, name){
+  if(!confirm(`Permanently delete the account for "${name}"? This cannot be undone.`)) return;
+  try{
+    const res=await apiFetch(`/auth/users/${id}`,{method:'DELETE'});
+    if(!res||(!res.ok && res.status!==204)){ toast('Failed to delete user','error'); return; }
+    toast(`User "${name}" deleted`,'success');
+    loadUsers();
+  }catch{ toast('Error deleting user','error'); }
 }
 
 async function addUser(){

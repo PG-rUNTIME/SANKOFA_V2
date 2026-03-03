@@ -1,6 +1,7 @@
 """
 Email service for password-reset notifications.
-Falls back to console logging when SMTP is not configured.
+Uses relay.liquidtelecom.net:25 (unauthenticated relay, no TLS).
+Falls back to console logging when SMTP is not reachable.
 """
 from __future__ import annotations
 
@@ -21,16 +22,18 @@ def _send_smtp(to_email: str, subject: str, html_body: str) -> None:
     msg["To"] = to_email
     msg.attach(MIMEText(html_body, "html"))
 
+    # Liquid Telecom relay: plain SMTP, no TLS, no auth
     with smtplib.SMTP(settings.SMTP_HOST, settings.SMTP_PORT, timeout=15) as server:
         server.ehlo()
-        server.starttls()
+        # Only attempt login if credentials are explicitly configured
         if settings.SMTP_USER and settings.SMTP_PASSWORD:
+            server.starttls()
             server.login(settings.SMTP_USER, settings.SMTP_PASSWORD)
         server.sendmail(settings.EMAIL_FROM, to_email, msg.as_string())
 
 
 def send_password_reset_email(to_email: str, reset_token: str, full_name: str) -> None:
-    """Send a password-reset email. Falls back to logging if SMTP not configured."""
+    """Send a password-reset email. Falls back to logging if SMTP not reachable."""
     reset_link = f"{settings.ALLOWED_ORIGINS[0]}/reset-password?token={reset_token}"
 
     html_body = f"""
@@ -67,15 +70,11 @@ def send_password_reset_email(to_email: str, reset_token: str, full_name: str) -
     </html>
     """
 
-    if not settings.SMTP_USER:
-        logger.info(
-            "SMTP not configured — password reset link for %s: %s", to_email, reset_link
-        )
-        return
-
     try:
         _send_smtp(to_email, "Sankofa: Password Reset Request", html_body)
         logger.info("Password reset email sent to %s", to_email)
     except Exception as exc:
         logger.error("Failed to send password reset email to %s: %s", to_email, exc)
+        # Log the link so admins can still retrieve it via server logs
+        logger.info("Password reset link for %s: %s", to_email, reset_link)
         # Don't raise — caller should not reveal email delivery status to client

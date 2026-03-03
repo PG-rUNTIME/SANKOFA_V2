@@ -59,8 +59,9 @@ class Settings(BaseSettings):
     RETRIEVER_TOP_K: int = 5
 
     # ── Email (for password reset) ────────────────────────────────────────────
-    SMTP_HOST: str = "smtp.gmail.com"
-    SMTP_PORT: int = 587
+    # Using Liquid Telecom unauthenticated SMTP relay (port 25, no TLS, no creds)
+    SMTP_HOST: str = "relay.liquidtelecom.net"
+    SMTP_PORT: int = 25
     SMTP_USER: Optional[str] = None
     SMTP_PASSWORD: Optional[str] = None
     EMAIL_FROM: str = "noreply@sankofa-legal.ai"
