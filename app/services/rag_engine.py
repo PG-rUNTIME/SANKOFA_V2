@@ -87,10 +87,15 @@ def _is_jailbreak(question: str) -> bool:
     return any(phrase in q for phrase in JAILBREAK_PATTERNS)
 
 
-def _is_clearly_non_legal(question: str) -> bool:
+def _is_clearly_non_legal(question: str, history: List[dict] | None = None) -> bool:
     q = question.lower()
     if any(kw in q for kw in LEGAL_DOMAIN_KEYWORDS):
         return False
+    # If the conversation has legal context, treat follow-ups as legal
+    if history:
+        recent = " ".join(m["content"] for m in history[-6:]).lower()
+        if any(kw in recent for kw in LEGAL_DOMAIN_KEYWORDS):
+            return False
     return any(kw in q for kw in NON_LEGAL_TOPICS)
 
 
@@ -257,9 +262,12 @@ def _build_citation_index(citations: List[Citation]) -> str:
 _ROUTER_SYSTEM = (
     "You are an intent classifier for a Zimbabwean Legal AI assistant called Sankofa.\n"
     "Classify the user's latest message as exactly one of:\n"
-    "  SEARCH     — a specific legal question requiring database lookup\n"
+    "  SEARCH     — a legal question, follow-up to a legal topic, or clarification of a previous legal answer\n"
     "  GREETING   — a greeting, 'who are you', or meta-question about the system\n"
-    "  NO_SEARCH  — a non-legal general question\n"
+    "  NO_SEARCH  — a clearly non-legal question with no connection to the conversation history\n"
+    "IMPORTANT: If the conversation history contains legal discussion, treat ambiguous or short "
+    "follow-up questions (e.g. 'what about X?', 'can you explain more?', 'and in that case?') as SEARCH.\n"
+    "When in doubt, choose SEARCH.\n"
     "Return ONLY the label word, nothing else."
 )
 

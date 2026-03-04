@@ -229,7 +229,7 @@ async def ask(
             await db.flush()
 
             # ── Classify + retrieve (parallel, inside stream) ─────────────────
-            if rag_engine._is_clearly_non_legal(question):
+            if rag_engine._is_clearly_non_legal(question, history):
                 intent = "NO_SEARCH"
                 docs = []
                 veritas_note = ""

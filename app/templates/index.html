@@ -1041,11 +1041,35 @@ function showAlert(id, msg, type='error'){
 }
 function hideAlert(id){ const el=document.getElementById(id); if(el){el.style.display='none'} }
 
+async function _refreshToken(){
+  if(!_rTok) return false;
+  try{
+    const r = await fetch(API+'/auth/refresh',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({refresh_token:_rTok})
+    });
+    if(!r.ok) return false;
+    const d=await r.json();
+    _tok=d.access_token; _rTok=d.refresh_token; _user=d.user;
+    localStorage.setItem('sk_at',_tok); localStorage.setItem('sk_rt',_rTok);
+    localStorage.setItem('sk_user',JSON.stringify(_user));
+    populateProfile();
+    return true;
+  }catch{ return false; }
+}
+
 async function apiFetch(path, opts={}){
   const hdrs={'Content-Type':'application/json',...(opts.headers||{})};
   if(_tok) hdrs['Authorization']=`Bearer ${_tok}`;
-  const res = await fetch(API+path,{...opts,headers:hdrs});
-  if(res.status===401){ doLogout(); return null; }
+  let res = await fetch(API+path,{...opts,headers:hdrs});
+  if(res.status===401){
+    const ok = await _refreshToken();
+    if(ok){
+      hdrs['Authorization']=`Bearer ${_tok}`;
+      res = await fetch(API+path,{...opts,headers:hdrs});
+      if(res.status===401){ doLogout(); return null; }
+    } else { doLogout(); return null; }
+  }
   return res;
 }
 
@@ -1117,16 +1141,35 @@ function doLogout(){
 }
 
 /* ─── App Mount ────────────────────────────────────────────────────────────── */
-function mountApp(){
-  document.getElementById('auth-screen').style.display='none';
-  document.getElementById('app').style.display='block';
-
-  // Populate sidebar user info
+function populateProfile(){
   const name=_user?.full_name||_user?.email||'User';
   const role=_user?.role||'user';
   document.getElementById('sb-av').textContent=initials(name);
   document.getElementById('sb-name').textContent=name;
   document.getElementById('sb-role').textContent=role;
+  document.getElementById('profile-av').textContent=initials(name);
+  document.getElementById('profile-name').textContent=name;
+  document.getElementById('profile-email').textContent=_user?.email||'';
+  const pbadge=document.getElementById('profile-badge');
+  pbadge.textContent=role;
+  pbadge.className=`badge ${role==='admin'?'badge-admin':'badge-user'}`;
+}
+
+async function mountApp(){
+  document.getElementById('auth-screen').style.display='none';
+  document.getElementById('app').style.display='block';
+
+  // Fetch fresh user data from server to ensure profile is up to date
+  try{
+    const r=await apiFetch('/auth/me');
+    if(r&&r.ok){
+      _user=await r.json();
+      localStorage.setItem('sk_user',JSON.stringify(_user));
+    }
+  }catch{ /* use cached _user if fetch fails */ }
+
+  populateProfile();
+  const role=_user?.role||'user';
 
   // Show the right nav
   if(role==='admin'){
@@ -1140,14 +1183,6 @@ function mountApp(){
     switchView('chat');
     loadSessions();
   }
-
-  // Populate account page
-  document.getElementById('profile-av').textContent=initials(name);
-  document.getElementById('profile-name').textContent=name;
-  document.getElementById('profile-email').textContent=_user?.email||'';
-  const pbadge=document.getElementById('profile-badge');
-  pbadge.textContent=role;
-  pbadge.className=`badge ${role==='admin'?'badge-admin':'badge-user'}`;
 }
 
 /* ─── Sidebar toggle (mobile) ──────────────────────────────────────────────── */
@@ -1449,11 +1484,17 @@ async function sendMsg(){
   }
 
   try{
-    const res = await fetch(API+'/chat/ask',{
+    const _doAsk = () => fetch(API+'/chat/ask',{
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':`Bearer ${_tok}`},
       body:JSON.stringify({question, session_id:_sid})
     });
+    let res = await _doAsk();
+    if(res.status===401){
+      const ok = await _refreshToken();
+      if(ok){ res = await _doAsk(); }
+      else { doLogout(); return; }
+    }
 
     if(!res.ok){
       const d=await res.json().catch(()=>({}));
